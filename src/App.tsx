@@ -1,14 +1,13 @@
 import { useState } from 'react'
 import { UNITS } from './data/units'
+import { selectQuestions } from './data/questions'
 import type { Question, QuizSession } from './types'
 
-type View = 'setup' | 'loading' | 'quiz' | 'results'
+type View = 'setup' | 'quiz' | 'results'
 type Choice = 'A' | 'B' | 'C' | 'D'
 
 export default function App() {
   const [view, setView] = useState<View>('setup')
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('isc_api_key') || '')
-  const [showKey, setShowKey] = useState(false)
   const [selectedUnits, setSelectedUnits] = useState<number[]>([1, 2, 3, 4])
   const [questionCount, setQuestionCount] = useState(10)
   const [questions, setQuestions] = useState<Question[]>([])
@@ -20,42 +19,20 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem('isc_sessions') || '[]') }
     catch { return [] }
   })
-  const [error, setError] = useState<string | null>(null)
 
   const toggleUnit = (id: number) =>
     setSelectedUnits(prev =>
       prev.includes(id) ? prev.filter(u => u !== id) : [...prev, id].sort()
     )
 
-  const startQuiz = async () => {
-    if (!apiKey.trim()) { setError('Enter your Anthropic API key'); return }
-    if (!selectedUnits.length) { setError('Select at least one unit'); return }
-
-    localStorage.setItem('isc_api_key', apiKey)
-    setError(null)
-    setView('loading')
-
-    try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey, units: selectedUnits, count: questionCount }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || `Request failed (${res.status})`)
-      }
-      const data = await res.json()
-      setQuestions(data.questions)
-      setCurrentIndex(0)
-      setSelected(null)
-      setChecked(false)
-      setAnswers({})
-      setView('quiz')
-    } catch (err: any) {
-      setError(err.message)
-      setView('setup')
-    }
+  const startQuiz = () => {
+    const picked = selectQuestions(selectedUnits, questionCount)
+    setQuestions(picked)
+    setCurrentIndex(0)
+    setSelected(null)
+    setChecked(false)
+    setAnswers({})
+    setView('quiz')
   }
 
   const checkAnswer = () => {
@@ -111,26 +88,6 @@ export default function App() {
         </div>
 
         <div className="bg-slate-900 rounded-xl p-6 border border-slate-800 space-y-5">
-          {/* API Key */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">API Key</label>
-            <div className="relative">
-              <input
-                type={showKey ? 'text' : 'password'}
-                value={apiKey}
-                onChange={e => setApiKey(e.target.value)}
-                placeholder="sk-ant-..."
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 pr-14"
-              />
-              <button
-                onClick={() => setShowKey(!showKey)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 text-xs hover:text-slate-300"
-              >
-                {showKey ? 'hide' : 'show'}
-              </button>
-            </div>
-          </div>
-
           {/* Unit Selection */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">Units</label>
@@ -155,7 +112,7 @@ export default function App() {
                       Unit {unit.id}: {unit.name}
                     </div>
                     <div className="text-xs text-slate-500 mt-0.5">
-                      {unit.area} &middot; {unit.weight}
+                      {unit.area} &middot; {unit.weight} &middot; {unit.topics.length} topics
                     </div>
                   </div>
                 </label>
@@ -182,12 +139,6 @@ export default function App() {
               ))}
             </div>
           </div>
-
-          {error && (
-            <div className="text-rose-400 text-sm bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
-              {error}
-            </div>
-          )}
 
           <button
             onClick={startQuiz}
@@ -219,16 +170,6 @@ export default function App() {
             </div>
           </div>
         )}
-      </div>
-    </div>
-  )
-
-  // ── Loading ────────────────────────────────────────────────
-  if (view === 'loading') return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-center space-y-4">
-        <div className="inline-block w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-slate-400">Generating {questionCount} questions...</p>
       </div>
     </div>
   )
